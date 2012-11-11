@@ -6,7 +6,7 @@
 
 	local GCAL_VERSION        = "V 1.2.3"
 	local LOG_DEBUG           = true
-	local UPDATE_FREQ         = 60 * 60 * 6 -- in seconds
+	--local UPDATE_FREQ         = 60 * 60 * 6 -- in seconds
 	local GCAL_SID            = "urn:utz-com:serviceId:GCal1"
 	local SECURITY_SID        = "urn:micasaverde-com:serviceId:SecuritySensor1"
 
@@ -39,9 +39,9 @@
 
 
 
-	function requestCalendar(url)
+	function requestCalendar(url, time_slot)
 	        debug("GCAL: checking google calendar")
-	
+
 	        if (url == nil) then
 	                debug("GCAL: google calendar private url is unset.")
 	                return nil
@@ -56,7 +56,7 @@
 	        debug("GCAL: start-min: " .. s)
 	        url = url .. "&amp;start-min=" .. s
 
-	        ta = os.date("!*t", now + UPDATE_FREQ)
+	        ta = os.date("!*t", now + time_slot)
 	        s = string.format("%d-%02d-%02dT%02d:%02d:%02d.000Z", ta.year, ta.month, ta.day, ta.hour, ta.min, ta.sec)
 	        debug("GCAL: start-max: " .. s)
 	        url = url .. "&amp;start-max=" .. s
@@ -87,21 +87,33 @@
 	function checkGCal()
         	local gcallink = luup.variable_get(GCAL_SID, "gcallink", lul_device)
 	        local gcalon = luup.variable_get(GCAL_SID, "gcalon", lul_device)
+		
+		local Freq_Hour = luup.variable_get(GCAL_SID,"Freq_Hour", lul_device)
+		if (Freq_Hour == nil or tonumber(Freq_Hour) &lt; 1) then Freq_Hour=6 end
+		local UPDATE_FREQ = 60 * 60 * tonumber(Freq_Hour)
+		
+		local TimeSlot_hour = luup.variable_get(GCAL_SID,"TimeSlot_hour", lul_device)
+		if (TimeSlot_hour == nil or tonumber(TimeSlot_hour) &lt; 1) then TimeSlot_hour=6 end
+		if tonumber(Freq_Hour) > tonumber(TimeSlot_hour) then TimeSlot_hour=Freq_Hour end
+		local time_slot = 60 * 60 * tonumber(TimeSlot_hour)
 	
 	        if (gcalon == nil) then
 	                debug("GCAL: google calendar event name is unset. Retry later...")
+			luup.variable_set(GCAL_SID,"nextevent","Not set calendar",lul_device)
 	                return { UPDATE_FREQ, "timeout", "" }
         	end
 
-	        local page = requestCalendar(gcallink)
+	        local page = requestCalendar(gcallink, time_slot)
 	        if (page == nil) then
 	                debug("GCAL: Unable to retreive google calendar datas. Retry later...")
+			luup.variable_set(GCAL_SID,"nextevent","No datas",lul_device)
 	                return { UPDATE_FREQ, "timeout", "" }
 	        end
 
 	        local json_root = json.decode(page)
 	        if (json_root == nil or json_root.feed == nil or json_root.feed.entry == nil or json_root.feed.entry[1] == nil) then
 	                debug("GCAL: No event in the next time window. Retry later...")
+			luup.variable_set(GCAL_SID,"nextevent","No event",lul_device)
 	                return { UPDATE_FREQ, "timeout", "" }
 	        end
 
@@ -115,12 +127,14 @@
 	        -- check if event name does not match
 	        if (json_entry == nil) then
 	        debug("GCAL: No event named \"" .. gcalon .. "\". Retry later...")
+			luup.variable_set(GCAL_SID,"nextevent","No event match",lul_device)
 	                return { UPDATE_FREQ, "timeout", "" }
 	        end
 
 	        local json_entry_title = json_entry.title['$t']
 	        local json_entry_timestart = json_entry['gd$when'][1].startTime
 	        local json_entry_timeend = json_entry['gd$when'][1].endTime
+		luup.variable_set(GCAL_SID,"nextevent",os.date("%d/%m/%y %X",strToTime(json_entry_timestart)).." "..json_entry_title,lul_device)
 
 	        debug("GCAL: event name  : " .. json_entry_title)
 	        debug("GCAL: event Start : " .. json_entry_timestart)
@@ -151,10 +165,12 @@
 	        end
 
 	        debug("GCAL: Next event starts in " .. diff_start .. " seconds.");
-
-	        return { diff_start, "start", gcalval}
+        	if (UPDATE_FREQ &lt; diff_start) then
+                	   return { UPDATE_FREQ, "timeout", gcalval }
+	        else
+	                   return { diff_start, "start", gcalval}
+	        end
 	end
-
 
 	-- check calendar with frequency UPDATE_FREQ
 	local interrupt = 1
@@ -225,6 +241,19 @@
 		local gcalval = luup.variable_get(GCAL_SID, "gcalval", lul_device)
 		if (gcalval == nil) then
 			luup.variable_set(GCAL_SID, "gcalval", "", lul_device)
+		end
+		
+		local Freq_Hour = luup.variable_get(GCAL_SID,"Freq_Hour", lul_device)
+		if Freq_Hour == nil then
+			luup.variable_set(GCAL_SID,"Freq_Hour",6,lul_device)
+		end
+		local TimeSlot_hour = luup.variable_get(GCAL_SID,"TimeSlot_hour", lul_device)
+		if TimeSlot_hour == nil then
+			luup.variable_set(GCAL_SID,"TimeSlot_hour",6,lul_device)
+		end
+		local nextevent = luup.variable_get(GCAL_SID,"nextevent", lul_device)
+		if nextevent == nil then
+			luup.variable_set(GCAL_SID,"nextevent","Next Event",lul_device)
 		end
 	        
 	        GCalTimer(json.encode({"startup", "", interrupt}))

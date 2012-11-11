@@ -5,18 +5,41 @@
     <minor>0</minor>
   </specVersion>
   <serviceStateTable>
-    <stateVariable sendEvents="no">
-      <name>gcallink</name>
-      <sendEventsAttribute>no</sendEventsAttribute>
-      <datatype>string</datatype>
-      <defaultValue></defaultValue>
-    </stateVariable>
-     <stateVariable sendEvents="no">
-      <name>gcalon</name>
-      <sendEventsAttribute>no</sendEventsAttribute>
-      <datatype>string</datatype>
-      <defaultValue>ON</defaultValue>
-    </stateVariable>
+   <stateVariable>
+	<name>gcallink</name>
+   	<sendEventsAttribute>no</sendEventsAttribute>
+	<dataType>string</dataType>
+	<defaultValue></defaultValue>
+	<shortCode>gcallink</shortCode>
+   </stateVariable>
+   <stateVariable>
+   	<name>gcalon</name>
+	<sendEventsAttribute>no</sendEventsAttribute>
+	<dataType>string</dataType>
+	<defaultValue>ON</defaultValue>
+	<shortCode>gcalon</shortCode>
+   </stateVariable>
+   <stateVariable>
+	<name>Freq_Hour</name>
+   	<sendEventsAttribute>no</sendEventsAttribute>
+	<dataType>i4</dataType>
+	<defaultValue>6</defaultValue>
+	<shortCode>freq_hour</shortCode>
+   </stateVariable>
+   <stateVariable>
+	<name>TimeSlot_hour</name>
+   	<sendEventsAttribute>no</sendEventsAttribute>
+	<dataType>i4</dataType>
+	<defaultValue>6</defaultValue>
+	<shortCode>timeSlot_hour</shortCode>
+   </stateVariable>
+   <stateVariable>
+   	<sendEventsAttribute>no</sendEventsAttribute>
+	<name>nextevent</name>
+	<dataType>string</dataType>
+	<defaultValue>Unset</defaultValue>
+	<shortCode>nextevent</shortCode>
+   </stateVariable>
   </serviceStateTable>
   <actionList>
     <action>

@@ -16,7 +16,7 @@
     "state_icons": [
         "Motion_Sensor_0.png",
         "Motion_Sensor_100.png"
-    ],    
+    ],
     "doc_url": {
         "doc_language": 1,
         "doc_manual": 1,
@@ -55,6 +55,13 @@
                     "x": "1",
                     "y": "1"
                 }
+		,{
+                    "id":"4",
+                    "top": "-0.5",
+                    "left": "-1",
+                    "x": "1",
+                    "y":"1"
+                }
             ],
             "ControlGroup":[
                 {
@@ -76,6 +83,11 @@
                     "id": "4",
                     "isSingle": "2",
                     "scenegroup": "3"
+                }
+ 		,{
+                    "id":"5",
+                    "isSingle":"1",
+                    "scenegroup":"4"
                 }
             ],
             "Control": [
@@ -258,6 +270,37 @@
                                 "ID": "NewGCalOn"
                             }
                         ]
+                    }
+                }
+		,{
+                    "ControlType": "label",
+                    "top": "0",
+                    "left": "0",
+                    "Label": {
+                        "lang_tag": "nextevent",
+                        "text": "Event : "
+                    },
+                    "Display": {
+                        "Top": 20,
+                        "Left": 50,
+                        "Width": 75,
+                        "Height": 20
+                    }
+                },
+                {
+                    "ControlGroup": "5",
+                    "ControlType": "variable",
+                    "top": "1",
+                    "left": "0",
+		    "text_align": "left",
+		    "x": "3",
+		    "Display": {
+                        "Service": "urn:utz-com:serviceId:GCal1",
+                        "Variable": "nextevent",
+                        "Top": 20,
+                        "Left": 150,
+                        "Width": 150,
+                        "Height": 20
                     }
                 }
             ]
