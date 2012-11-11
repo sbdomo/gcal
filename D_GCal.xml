@@ -1,0 +1,38 @@
+<?xml version="1.0"?>
+<root xmlns="urn:schemas-upnp-org:device-1-0">
+  <specVersion>
+    <major>1</major>
+    <minor>0</minor>
+  </specVersion>
+  <device>
+    <deviceType>urn:schemas-utz-com:device:GCal:1</deviceType>
+    <staticJson>D_GCal.json</staticJson>
+    <serviceList>
+	<service>
+		<serviceType>urn:schemas-utz-com:service:GCal:1</serviceType>
+		<serviceId>urn:utz-com:serviceId:GCal1</serviceId>
+		<SCPDURL>S_GCal.xml</SCPDURL>
+	</service>
+	<service>
+		<serviceType>urn:schemas-micasaverde-com:service:SecuritySensor:1</serviceType>
+		<serviceId>urn:micasaverde-com:serviceId:SecuritySensor1</serviceId>
+		<SCPDURL>S_SecuritySensor1.xml</SCPDURL>
+	</service>
+    </serviceList>
+    <friendlyName>GCal Sensor</friendlyName>
+    <manufacturer>psykokwak</manufacturer>
+    <manufacturerURL>www.psykokwak.com</manufacturerURL>
+    <modelDescription>GCal Sensor</modelDescription>
+    <modelName>GCal Sensor</modelName>
+    <modelNumber>1.2</modelNumber>
+                        
+    <serialNumber>123456789001</serialNumber>
+    <UDN>uuid:gcal-1234567890001</UDN>
+    <UPC>123456789</UPC>
+    <handleChildren>0</handleChildren>
+    <implementationList>
+      <implementationFile>I_GCal.xml</implementationFile>
+    </implementationList>
+    <presentationURL>/gcal.html</presentationURL>
+   </device>
+</root>

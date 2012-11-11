@@ -1,0 +1,303 @@
+<?xml version="1.0"?>
+<implementation>
+  <functions>
+	local http = require("socket.http")
+	local json = require("json")
+
+	local GCAL_VERSION        = "V 1.2.3"
+	local LOG_DEBUG           = true
+	local UPDATE_FREQ         = 60 * 60 * 6 -- in seconds
+	local GCAL_SID            = "urn:utz-com:serviceId:GCal1"
+	local SECURITY_SID        = "urn:micasaverde-com:serviceId:SecuritySensor1"
+
+	function debug(s)
+        	if (LOG_DEBUG) then
+                	luup.log(s)
+	        end
+	end
+
+	function get_timezone()
+	        local now = os.time()
+	        local date = os.date("!*t", now)
+	        date.isdst = os.date("*t").isdst
+	        return now - os.time(date)
+	end
+
+
+
+	function strToTime(s)
+	        _,_,year,month,day,hour,minute,second = string.find(s, "(%d+)-(%d+)-(%d+)T(%d+):(%d+):(%d+).000Z")
+	        if (year == nil) then
+	                _,_,year,month,day = string.find(s, "(%d+)-(%d+)-(%d+)")
+	                hour = 0
+	                minute = 0
+	                second = - get_timezone()
+	        end
+	
+	        return os.time({isdst=os.date("*t").isdst,year=year,month=month,day=day,hour=hour,min=minute,sec=second}) + get_timezone()
+	end
+
+
+
+	function requestCalendar(url)
+	        debug("GCAL: checking google calendar")
+	
+	        if (url == nil) then
+	                debug("GCAL: google calendar private url is unset.")
+	                return nil
+	        end
+
+	        url = url .. "?alt=json&amp;fields=entry/title,entry/gd:when&amp;singleevents=true&amp;orderby=starttime&amp;ctz=utc"
+
+	        local now = os.time()
+
+	        local ta = os.date("!*t", now)
+	        local s = string.format("%d-%02d-%02dT%02d:%02d:%02d.000Z", ta.year, ta.month, ta.day, ta.hour, ta.min, ta.sec)
+	        debug("GCAL: start-min: " .. s)
+	        url = url .. "&amp;start-min=" .. s
+
+	        ta = os.date("!*t", now + UPDATE_FREQ)
+	        s = string.format("%d-%02d-%02dT%02d:%02d:%02d.000Z", ta.year, ta.month, ta.day, ta.hour, ta.min, ta.sec)
+	        debug("GCAL: start-max: " .. s)
+	        url = url .. "&amp;start-max=" .. s
+
+	        local page, status = http.request(url)
+	        debug("GCAL: query url: " .. url)
+	        debug("GCAL: query status: " .. status)
+
+	        if (status ~= 200) then
+	                debug("GCAL: Request error. Code : " .. status)
+	                return nil
+	        end
+
+	        return page
+	end
+
+	function eventIdByTitle(tab, title)
+        	local i = table.getn(tab)
+        	while i > 0 do
+	                if string.find(tab[i].title['$t'], title) ~= nil then
+	                        return tab[i]
+	                end
+	                i = i - 1
+	        end
+	        return nil
+	end
+
+	function checkGCal()
+        	local gcallink = luup.variable_get(GCAL_SID, "gcallink", lul_device)
+	        local gcalon = luup.variable_get(GCAL_SID, "gcalon", lul_device)
+	
+	        if (gcalon == nil) then
+	                debug("GCAL: google calendar event name is unset. Retry later...")
+	                return { UPDATE_FREQ, "timeout", "" }
+        	end
+
+	        local page = requestCalendar(gcallink)
+	        if (page == nil) then
+	                debug("GCAL: Unable to retreive google calendar datas. Retry later...")
+	                return { UPDATE_FREQ, "timeout", "" }
+	        end
+
+	        local json_root = json.decode(page)
+	        if (json_root == nil or json_root.feed == nil or json_root.feed.entry == nil or json_root.feed.entry[1] == nil) then
+	                debug("GCAL: No event in the next time window. Retry later...")
+	                return { UPDATE_FREQ, "timeout", "" }
+	        end
+
+
+		-- check if there is a gcalon value. If no, select the first one.
+		local json_entry = json_root.feed.entry[table.getn(json_root.feed.entry)]
+		if (gcalon ~= nil and gcalon ~= "") then
+			json_entry = eventIdByTitle(json_root.feed.entry, gcalon)
+		end
+
+	        -- check if event name does not match
+	        if (json_entry == nil) then
+	        debug("GCAL: No event named \"" .. gcalon .. "\". Retry later...")
+	                return { UPDATE_FREQ, "timeout", "" }
+	        end
+
+	        local json_entry_title = json_entry.title['$t']
+	        local json_entry_timestart = json_entry['gd$when'][1].startTime
+	        local json_entry_timeend = json_entry['gd$when'][1].endTime
+
+	        debug("GCAL: event name  : " .. json_entry_title)
+	        debug("GCAL: event Start : " .. json_entry_timestart)
+	        debug("GCAL: event End   : " .. json_entry_timeend)
+
+	        -- look if the event name has a parameter
+	        local gcalval = string.match(json_entry_title, gcalon .. "{([^}]+)}.*$")
+	        if (gcalval == nil) then
+	        	gcalval = ""
+	                debug("GCAL: no value attached")
+	        else
+	                debug("GCAL: attached value: " .. gcalval)
+	        end
+
+
+	        -- Compute the delay in seconds before the next event starts
+	        local now = os.time()
+	        local diff_start = strToTime(json_entry_timestart) - now
+	        local diff_end = strToTime(json_entry_timeend) - now
+
+	        if (diff_start &lt; 0) then
+	                debug("GCAL: Event running for " .. - diff_start .. " seconds until " .. diff_end .. " seconds.")
+        	        if (UPDATE_FREQ &lt; diff_end) then
+                	        return { UPDATE_FREQ, "timein", gcalval }
+	                else
+	                        return { diff_end, "end", gcalval }
+	                end
+	        end
+
+	        debug("GCAL: Next event starts in " .. diff_start .. " seconds.");
+
+	        return { diff_start, "start", gcalval}
+	end
+
+
+	-- check calendar with frequency UPDATE_FREQ
+	local interrupt = 1
+	function GCalTimer(stuff)
+		stuff = json.decode(stuff)
+
+		if (interrupt > stuff[3]) then
+			debug("GCAL: Timer: Interrupt call that have interrupt index: " .. stuff[3])
+			return
+		end
+
+	        if (stuff[1] == "start") then
+        	        debug("GCAL: Timer: Event has just started !")
+			luup.variable_set(GCAL_SID, "gcalval", stuff[2], lul_device)
+	                luup.variable_set(SECURITY_SID, "Tripped", 1, lul_device)
+	        end
+
+	        if (stuff[1] == "end") then
+	        	debug("GCAL: Timer: Event has just finished !")
+	                luup.variable_set(SECURITY_SID, "Tripped", 0, lul_device)
+	                luup.variable_set(GCAL_SID, "gcalval", "", lul_device)
+        	end
+
+		if (stuff[1] == "end" or stuff[1] == "start") then
+			debug("GCAL: Event triggered. We wait few seconds before next update")
+			luup.call_timer("GCalTimer", 1, 10, "", json.encode({"timeout", "", interrupt}))
+			return 
+		end
+
+	        local next = checkGCal()
+	        
+	        -- Check if we are inside or outside an event
+	        local tripped = luup.variable_get(SECURITY_SID, "Tripped", lul_device)
+	        if (next[2] == "end" or next[2] == "timein") then
+			if (tonumber(tripped) == 0) then
+				debug("GCAL: Timer: We already are inside an event, so trigger now");
+                                luup.variable_set(GCAL_SID, "gcalval", next[3], lul_device)
+				luup.variable_set(SECURITY_SID, "Tripped", 1, lul_device)
+			end	        	
+	        else
+	       		if (tonumber(tripped) == 1) then
+	                        debug("GCAL: Timer: We already are outside an event, so untrigger now");
+	                        luup.variable_set(SECURITY_SID, "Tripped", 0, lul_device)
+	                        luup.variable_set(GCAL_SID, "gcalval", "", lul_device)
+	                end
+	        end
+	        
+        	debug("GCAL: Timer: Next event \"" .. next[2] .. "\" in " .. next[1] .. " seconds")
+        	debug("GCAL: Timer: Interrupt index : " .. stuff[3] .. " = " .. interrupt)
+
+	        luup.call_timer("GCalTimer", 1, next[1], "", json.encode({next[2], next[3], interrupt}))
+	end
+
+
+	-- startup
+	function GCalStartup(lul_device)
+	        -- Because variables does not exist before the first "variable_set" we create them
+		local armed = luup.variable_get(SECURITY_SID, "Armed", lul_device)
+		if (armed == nil) then
+			luup.variable_set(SECURITY_SID, "Armed", 0, lul_device)
+		end
+
+		local tripped = luup.variable_get(SECURITY_SID, "Tripped", lul_device)
+		if (tripped == nil) then
+			luup.variable_set(SECURITY_SID, "Tripped", 0, lul_device)
+	        end
+
+		local gcalval = luup.variable_get(GCAL_SID, "gcalval", lul_device)
+		if (gcalval == nil) then
+			luup.variable_set(GCAL_SID, "gcalval", "", lul_device)
+		end
+	        
+	        GCalTimer(json.encode({"startup", "", interrupt}))
+	end
+  </functions>
+  <incoming>
+	<lua>
+		luup.log(string.format("GCAL: incoming should not be called on this device"))
+	</lua>
+  </incoming>
+  <startup>GCalStartup</startup>
+  <actionList>
+  <action>
+     <serviceId>urn:micasaverde-com:serviceId:SecuritySensor1</serviceId>
+     <name>SetArmed</name>
+     <run>
+	luup.variable_set(SECURITY_SID, "Armed", lul_settings.newArmedValue, lul_device)
+     </run>
+  </action>
+  <action>      
+     <serviceId>urn:utz-com:serviceId:GCal1</serviceId>
+     <name>GCalCheck</name>
+     <run>
+	luup.log(string.format("GCAL: Manual Check Calendar"))
+	luup.task(tostring("Manual Check Calendar"), 1, luup.devices[lul_device].description, -1)
+
+	interrupt = interrupt + 1
+	GCalTimer(json.encode({"manual", "", interrupt}))	
+     </run>
+  </action>
+  <action>
+     <serviceId>urn:utz-com:serviceId:GCal1</serviceId>
+     <name>SetGCalLink</name>
+     <run>
+	luup.log(string.format("GCAL: set calendar link (gcallink)"))
+	
+	if (lul_settings.NewGCalLink == nil) then
+		debug("GCAL: gcallink is nil.")
+		luup.task(tostring("Calendar link can not be empty!"), 1, luup.devices[lul_device].description, -1)
+		return 
+	end
+	
+	local gcallink = "http://" .. lul_settings.NewGCalLink:match("^https?://(.*)basic") .. "full"
+	local gcalsrc = gcallink:match("^http://www.google.com/calendar/feeds/([^/]*)/.*$")
+	
+	luup.variable_set(GCAL_SID, "gcalsrc", gcalsrc, lul_device)
+       	luup.variable_set(GCAL_SID, "gcallink", gcallink, lul_device)
+
+       	debug("GCAL: Set Calendar id : " .. gcalsrc)
+       	debug("GCAL: Set Calendar Link : " .. gcallink)
+
+        luup.task(tostring("Set Calendar Link"), 1, luup.devices[lul_device].description, -1)
+     </run>
+  </action>
+  <action>
+     <serviceId>urn:utz-com:serviceId:GCal1</serviceId>
+     <name>SetGCalOn</name>
+     <run>
+	luup.log(string.format("GCAL: set calendar keyword (gcalon)"))
+
+	local gcalon = lul_settings.NewGCalOn
+	if (gcalon == nil) then
+		debug("GCAL: gcalon is nil.")
+		luup.task(tostring("All events will be triggered."), 1, luup.devices[lul_device].description, -1)
+		gcalon = ""
+	end
+
+       	luup.variable_set(GCAL_SID, "gcalon", gcalon, lul_device)
+
+       	debug("GCAL: Set Calendar event : " .. gcalon)
+
+       	luup.task(tostring("Set Calendar Event"), 1, luup.devices[lul_device].description, -1)
+     </run>
+   </action>
+  </actionList>
+</implementation>

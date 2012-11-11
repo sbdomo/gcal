@@ -1,0 +1,44 @@
+<?xml version="1.0"?>
+<scpd xmlns="urn:schemas-upnp-org:service-1-0">
+  <specVersion>
+    <major>1</major>
+    <minor>0</minor>
+  </specVersion>
+  <serviceStateTable>
+    <stateVariable sendEvents="no">
+      <name>gcallink</name>
+      <sendEventsAttribute>no</sendEventsAttribute>
+      <datatype>string</datatype>
+      <defaultValue></defaultValue>
+    </stateVariable>
+     <stateVariable sendEvents="no">
+      <name>gcalon</name>
+      <sendEventsAttribute>no</sendEventsAttribute>
+      <datatype>string</datatype>
+      <defaultValue>ON</defaultValue>
+    </stateVariable>
+  </serviceStateTable>
+  <actionList>
+    <action>
+      	<name>GCalCheck</name>
+    </action>
+    <action>
+      	<name>SetGCalLink</name>
+      	<argumentList>
+         <argument>
+          <name>NewGCalLink</name>
+          <direction>in</direction>
+         </argument>
+      </argumentList>
+    </action>
+    <action>
+      <name>SetGCalOn</name>
+      <argumentList>
+        <argument>
+          <name>NewGCalOn</name>
+          <direction>in</direction>
+        </argument>
+      </argumentList>
+    </action>
+  </actionList>
+</scpd>
